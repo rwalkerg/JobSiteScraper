@@ -1,15 +1,16 @@
 # netlify.toml
 
-# Each scheduled function is defined in its own block.
-# The general [functions] block was removed to fix the TOML syntax error.
-# The 'directory' will default to 'netlify/functions/', which is what you're using.
+# Define global settings for all functions.
+# The directory is the default, but we declare it for clarity.
+[functions]
+  directory = "netlify/functions/"
 
-# Schedule for the function that GETS the job links
-[[functions]]
+# Configure the 'get-job-links' function specifically
+[functions."get-job-links"]
+  # Schedule it to run at 8:00 AM daily
   schedule = "0 8 * * *"
-  name = "get-job-links"
 
-# Schedule for the function that PROCESSES a batch of job links
-[[functions]]
+# Configure the 'process-job-links' function specifically
+[functions."process-job-links"]
+  # Schedule it to run every 2 minutes
   schedule = "*/2 * * * *"
-  name = "process-job-links"
