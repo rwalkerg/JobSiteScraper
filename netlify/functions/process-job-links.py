@@ -6,7 +6,7 @@ import json
 import time
 
 # --- START: YOU MUST CUSTOMIZE THIS SECTION ---
-KEYWORDS = ['python', 'django', 'fastapi', 'aws', 'remote']
+KEYWORDS = ['PhD']
 USER_AGENT = 'Your Name/Email - Job Scraper Bot'
 BATCH_SIZE = 5 # How many links to process per run to avoid timeouts
 # --- END: CUSTOMIZATION SECTION ---
