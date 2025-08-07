@@ -10,6 +10,7 @@ import traceback
 # These are examples for Indeed.com
 LINK_SELECTOR = 'a.jcs-JobTitle'
 DESCRIPTION_SELECTOR = 'div#jobDescriptionText'
+# --- FIXED: Corrected the invalid string which had markdown in it ---
 BASE_URL = "https://www.indeed.com" # Used to construct full URLs if links are relative
 # ---
 
