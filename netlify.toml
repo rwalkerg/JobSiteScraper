@@ -1,10 +1,11 @@
 # netlify.toml
 
-# This new build command attempts to manually run the installation steps.
-[build]
-  command = "mise use python@3.11.13 && mise install && pip install -r requirements.txt"
+# This new approach sets the Python version using an environment variable
+# instead of a build command.
+[build.environment]
+  PYTHON_VERSION = "3.11"
 
-# Your existing functions configuration remains the same.
+# Your functions configuration remains the same.
 [functions]
   directory = "netlify/functions/"
 
