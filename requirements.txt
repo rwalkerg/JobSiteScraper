@@ -2,4 +2,4 @@
 
 requests
 beautifulsoup4
-netlify-python-blobs
+netlify-blobs
