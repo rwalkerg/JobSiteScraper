@@ -2,18 +2,17 @@
 
 # Main configuration for functions
 [functions]
-  included_files = ["!**/__pycache__/**"] # Exclude Python cache files
-  # This tells Netlify where to find your function handlers
+  included_files = ["!**/__pycache__/**"]
   directory = "netlify/functions/"
 
 # Schedule for the function that GETS the job links
-[[functions.scheduled]]
-# Cron expression for "at 8:00 AM every day"
-cron = "0 8 * * *"
-function = "get-job-links"
+[[functions]]
+  # The schedule uses cron syntax
+  schedule = "0 8 * * *"
+  # The name of the function file (without .py)
+  name = "get-job-links"
 
 # Schedule for the function that PROCESSES a batch of job links
-[[functions.scheduled]]
-# Cron expression for "every 2 minutes" to process in batches
-cron = "*/2 * * * *"
-function = "process-job-links"
+[[functions]]
+  schedule = "*/2 * * * *"
+  name = "process-job-links"
