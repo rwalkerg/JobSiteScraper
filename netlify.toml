@@ -1,16 +1,15 @@
 # netlify.toml
 
-# Define global settings for all functions.
-# The directory is the default, but we declare it for clarity.
+# This new build section is for debugging the dependency issue.
+[build]
+  command = "echo '--- Listing files in root directory ---' && ls -la && echo '--- Displaying .tool-versions content ---' && cat .tool-versions && echo '--- Installing dependencies now ---' && pip install -r requirements.txt"
+
+# Your existing functions configuration remains the same.
 [functions]
   directory = "netlify/functions/"
 
-# Configure the 'get-job-links' function specifically
 [functions."get-job-links"]
-  # Schedule it to run at 8:00 AM daily
   schedule = "0 8 * * *"
 
-# Configure the 'process-job-links' function specifically
 [functions."process-job-links"]
-  # Schedule it to run every 2 minutes
   schedule = "*/2 * * * *"
