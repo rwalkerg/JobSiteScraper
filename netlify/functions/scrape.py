@@ -7,6 +7,7 @@ import time
 # These are examples for Indeed.com
 LINK_SELECTOR = 'a.jcs-JobTitle'
 DESCRIPTION_SELECTOR = 'div#jobDescriptionText'
+# --- FIXED: Removed markdown formatting from the URL string ---
 BASE_URL = "[https://www.indeed.com](https://www.indeed.com)" # Used to construct full URLs if links are relative
 # ---
 
