@@ -1,15 +1,12 @@
 # netlify.toml
 
-# Main configuration for functions
-[functions]
-  included_files = ["!**/__pycache__/**"]
-  directory = "netlify/functions/"
+# Each scheduled function is defined in its own block.
+# The general [functions] block was removed to fix the TOML syntax error.
+# The 'directory' will default to 'netlify/functions/', which is what you're using.
 
 # Schedule for the function that GETS the job links
 [[functions]]
-  # The schedule uses cron syntax
   schedule = "0 8 * * *"
-  # The name of the function file (without .py)
   name = "get-job-links"
 
 # Schedule for the function that PROCESSES a batch of job links
