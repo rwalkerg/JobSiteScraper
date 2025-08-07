@@ -1,8 +1,9 @@
+# netlify.toml
+
 [build]
-  # This tells Netlify where to find your site's files.
-  # Since index.html is in the root, we can set it to the root.
-  publish = "." 
+  # The root directory of your site, where index.html is located.
+  publish = "."
 
 [functions]
-  # This tells Netlify where to find your function files.
+  # The directory where your Python function files are located.
   directory = "netlify/functions/"
