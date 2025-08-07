@@ -1,19 +1,8 @@
-# netlify.toml
-
-# Final debug attempt: Install all packages manually.
-# NOTE: The requirements.txt file MUST be deleted for this to work.
 [build]
-  command = "pip install requests beautifulsoup4 netlify-blobs"
+  # This tells Netlify where to find your site's files.
+  # Since index.html is in the root, we can set it to the root.
+  publish = "." 
 
-[build.environment]
-  PYTHON_VERSION = "3.11"
-
-# Your functions configuration remains the same.
 [functions]
+  # This tells Netlify where to find your function files.
   directory = "netlify/functions/"
-
-[functions."get-job-links"]
-  schedule = "0 8 * * *"
-
-[functions."process-job-links"]
-  schedule = "*/2 * * * *"
