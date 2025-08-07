@@ -5,8 +5,8 @@ import os
 import json
 
 # --- START: YOU MUST CUSTOMIZE THIS SECTION ---
-SEARCH_URL = 'https://www.indeed.com/jobs?q=python+developer' # The URL of your job search
-USER_AGENT = 'Your Name/Email - Job Scraper Bot' # Be a good citizen, identify your bot
+SEARCH_URL = 'https://careers.regeneron.com/en/jobs/?keyword=&country=United+States+of+America&pagesize=100#results' # The URL of your job search
+USER_AGENT = 'George Jefferson - Moving on up bot' # Be a good citizen, identify your bot
 # --- END: CUSTOMIZATION SECTION ---
 
 def handler(event, context):
