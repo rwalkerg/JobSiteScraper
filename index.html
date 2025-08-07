@@ -28,13 +28,11 @@
 
     <div class="container mx-auto max-w-3xl px-4 py-8 sm:py-12">
         
-        <!-- Header -->
         <header class="text-center mb-8">
             <h1 class="text-4xl font-bold text-gray-900 tracking-tight">Job Scraper</h1>
             <p class="mt-2 text-lg text-gray-600">Enter a job search URL and keywords to find relevant listings.</p>
         </header>
 
-        <!-- Main Form -->
         <main class="bg-white p-6 sm:p-8 rounded-2xl shadow-lg">
             <form id="scraper-form">
                 <div class="space-y-6">
@@ -55,29 +53,30 @@
                     </div>
                 </div>
 
-                <div class="mt-8">
+                <!-- EDITED: Added a flex container for the buttons -->
+                <div class="mt-8 flex items-center space-x-4">
                     <button type="submit" id="submit-button" class="flex w-full justify-center items-center rounded-md bg-indigo-600 px-3 py-2.5 text-sm font-semibold leading-6 text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:bg-indigo-300">
                         Start Scraping
+                    </button>
+                    <!-- ADDED: New button to test the simple function -->
+                    <button type="button" id="test-button" class="flex w-full justify-center items-center rounded-md bg-gray-600 px-3 py-2.5 text-sm font-semibold leading-6 text-white shadow-sm hover:bg-gray-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600">
+                        Test Function
                     </button>
                 </div>
             </form>
         </main>
 
-        <!-- Status and Results -->
         <section id="results-section" class="mt-8 hidden">
             <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-lg">
                 <h2 class="text-2xl font-bold text-gray-900 mb-4">Results</h2>
                 
-                <!-- Status Message Area -->
                 <div id="status-container" class="text-center py-8">
                     <div id="loader" class="loader mx-auto mb-4 hidden"></div>
                     <p id="status-message" class="text-gray-600"></p>
                 </div>
 
-                <!-- Results List -->
                 <div id="results-list" class="mt-4 space-y-4">
-                    <!-- Matched jobs will be injected here by JavaScript -->
-                </div>
+                    </div>
             </div>
         </section>
 
@@ -86,11 +85,38 @@
     <script>
         const scraperForm = document.getElementById('scraper-form');
         const submitButton = document.getElementById('submit-button');
+        const testButton = document.getElementById('test-button'); // Get the new button
         const resultsSection = document.getElementById('results-section');
         const statusContainer = document.getElementById('status-container');
         const statusMessage = document.getElementById('status-message');
         const loader = document.getElementById('loader');
         const resultsList = document.getElementById('results-list');
+
+        // --- ADDED: Event listener for the test button ---
+        testButton.addEventListener('click', async () => {
+            resultsSection.classList.remove('hidden');
+            resultsList.innerHTML = '';
+            statusMessage.textContent = 'Calling test function...';
+            statusMessage.classList.remove('text-red-600');
+            loader.classList.remove('hidden');
+
+            try {
+                const response = await fetch('/.netlify/functions/test');
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || `Error: ${response.status}`);
+                }
+                
+                statusMessage.textContent = `Success! Response: "${data.message}"`;
+
+            } catch (error) {
+                statusMessage.textContent = `Test Failed: ${error.message}`;
+                statusMessage.classList.add('text-red-600');
+            } finally {
+                loader.classList.add('hidden');
+            }
+        });
 
         scraperForm.addEventListener('submit', async (event) => {
             event.preventDefault(); // Prevent the form from submitting the traditional way
@@ -123,18 +149,14 @@
                     }),
                 });
 
-                // --- EDITED: More robust error handling ---
                 if (!response.ok) {
                     let errorMessage = `Error: ${response.status} ${response.statusText}`;
                     try {
-                        // Try to parse a JSON error body, if it exists
                         const errorData = await response.json();
                         if (errorData && errorData.error) {
                             errorMessage = errorData.error;
                         }
                     } catch (jsonError) {
-                        // The response body was not valid JSON. 
-                        // The status text is our best guess. This often happens on timeouts.
                         console.log("Could not parse error response as JSON.", jsonError);
                     }
                     throw new Error(errorMessage);
