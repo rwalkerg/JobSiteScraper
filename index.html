@@ -101,6 +101,7 @@
             resultsSection.classList.remove('hidden');
             resultsList.innerHTML = ''; // Clear previous results
             statusMessage.textContent = 'Scraping job site... this may take up to 25 seconds.';
+            statusMessage.classList.remove('text-red-600'); // Reset error color
             loader.classList.remove('hidden');
 
             // --- Get Form Data ---
@@ -122,9 +123,21 @@
                     }),
                 });
 
+                // --- EDITED: More robust error handling ---
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || `HTTP error! Status: ${response.status}`);
+                    let errorMessage = `Error: ${response.status} ${response.statusText}`;
+                    try {
+                        // Try to parse a JSON error body, if it exists
+                        const errorData = await response.json();
+                        if (errorData && errorData.error) {
+                            errorMessage = errorData.error;
+                        }
+                    } catch (jsonError) {
+                        // The response body was not valid JSON. 
+                        // The status text is our best guess. This often happens on timeouts.
+                        console.log("Could not parse error response as JSON.", jsonError);
+                    }
+                    throw new Error(errorMessage);
                 }
 
                 const data = await response.json();
@@ -161,5 +174,3 @@
     </script>
 </body>
 </html>
-
-
