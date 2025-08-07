@@ -1,8 +1,8 @@
 # netlify.toml
 
-# This new build section is for debugging the dependency issue.
+# This new build command attempts to manually run the installation steps.
 [build]
-  command = "echo '--- Listing files in root directory ---' && ls -la && echo '--- Displaying .tool-versions content ---' && cat .tool-versions && echo '--- Installing dependencies now ---' && pip install -r requirements.txt"
+  command = "mise use python@3.11.13 && mise install && pip install -r requirements.txt"
 
 # Your existing functions configuration remains the same.
 [functions]
