@@ -1,7 +1,10 @@
 # netlify.toml
 
-# This new approach sets the Python version using an environment variable
-# instead of a build command.
+# Final debug attempt: Install all packages manually.
+# NOTE: The requirements.txt file MUST be deleted for this to work.
+[build]
+  command = "pip install requests beautifulsoup4 netlify-blobs"
+
 [build.environment]
   PYTHON_VERSION = "3.11"
 
