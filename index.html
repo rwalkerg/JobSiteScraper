@@ -1,103 +1,355 @@
-import json
-import requests
-from bs4 import BeautifulSoup
-import time
-import traceback
-
-# --- Configuration ---
-# Selectors for Indeed.com. These MUST be changed for other sites.
-LINK_SELECTOR = 'h2.jobTitle > a'
-DESCRIPTION_SELECTOR = 'div#jobDescriptionText'
-BASE_URL = "https://www.indeed.com"
-USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-MAX_LINKS_TO_CHECK = 20 # Limit to avoid function timeouts. Increased slightly.
-PAGES_TO_SCRAPE = 3 # How many pages of search results to scrape.
-
-def get_links(url):
-    """
-    Gets all job links from the first few pages of a search result.
-    """
-    all_links = []
-    
-    # Loop through the first N pages. For Indeed, each page is a 'start' parameter incremented by 10.
-    for page in range(PAGES_TO_SCRAPE):
-        start_index = page * 10
-        # Append the start parameter to the URL. Use '?' if it's the first param, '&' otherwise.
-        paginated_url = f"{url}&start={start_index}"
-        
-        print(f"Scraping links from page {page + 1}: {paginated_url}")
-
-        try:
-            response = requests.get(paginated_url, headers={'User-Agent': USER_AGENT})
-            response.raise_for_status()
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            links_on_page = [a['href'] for a in soup.select(LINK_SELECTOR) if 'href' in a.attrs]
-            full_links = [BASE_URL + link if link.startswith('/') else link for link in links_on_page]
-            all_links.extend(full_links)
-            
-            # Small delay between page requests
-            time.sleep(0.2)
-
-        except Exception as e:
-            print(f"Could not scrape page {page + 1}. Reason: {e}")
-            # Continue to the next page even if one fails
-            continue
-            
-    return list(set(all_links)) # Return unique links from all pages
-
-def get_keywords_from_page(url, keywords):
-    """Checks a single job page for a list of keywords."""
-    try:
-        time.sleep(0.5) # Be respectful to the server
-        response = requests.get(url, headers={'User-Agent': USER_AGENT})
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        description_area = soup.select_one(DESCRIPTION_SELECTOR)
-        if not description_area:
-            return None
-
-        page_text = description_area.get_text().lower()
-        found_keywords = [kw for kw in keywords if kw in page_text]
-        
-        if found_keywords:
-            title = soup.title.string.replace('- Indeed.com', '').strip() if soup.title else 'Job Listing'
-            return {'title': title, 'link': url, 'found_keywords': found_keywords}
-        return None
-    except Exception:
-        # We can ignore errors on individual pages
-        return None
-
-def handler(event, context):
-    """The main Netlify Function handler."""
-    try:
-        body = json.loads(event.get('body', '{}'))
-        search_url = body.get('search_url')
-        keywords = body.get('keywords', [])
-
-        if not search_url or not keywords:
-            return {'statusCode': 400, 'body': json.dumps({'error': 'Missing search URL or keywords.'})}
-
-        all_links = get_links(search_url)
-        links_to_check = all_links[:MAX_LINKS_TO_CHECK]
-        
-        print(f"Found {len(all_links)} total links across {PAGES_TO_SCRAPE} pages. Checking the first {len(links_to_check)}.")
-
-        matched_jobs = []
-        for link in links_to_check:
-            job_details = get_keywords_from_page(link, keywords)
-            if job_details:
-                matched_jobs.append(job_details)
-        
-        return {
-            'statusCode': 200,
-            'headers': {'Content-Type': 'application/json'},
-            'body': json.dumps({'matched_jobs': matched_jobs})
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Keyword Finder</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
         }
-    except Exception as e:
-        print(traceback.format_exc())
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'error': str(e)})
+        .btn {
+            font-weight: bold;
+            padding-top: 0.75rem;
+            padding-bottom: 0.75rem;
+            padding-left: 2rem;
+            padding-right: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
         }
+        .btn:hover {
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            transform: scale(1.05);
+        }
+        .btn:disabled {
+            background-color: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        .btn-primary {
+            background-color: #0d9488; /* Dark Teal */
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #0f766e;
+        }
+        .btn-secondary {
+            background-color: #475569; /* Slate 600 */
+            color: white;
+        }
+        .btn-secondary:hover {
+             background-color: #334155; /* Slate 700 */
+        }
+        .result-item-success {
+            border-left: 4px solid #10b981; /* Green-500 */
+        }
+        .result-item-error {
+            border-left: 4px solid #ef4444; /* Red-500 */
+        }
+    </style>
+</head>
+<body class="bg-slate-100 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-2xl bg-white rounded-2xl shadow-xl p-6 md:p-8">
+        
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-slate-800">Job Keyword Finder</h1>
+            <p class="text-slate-500 mt-2">Find job listings that match your skills.</p>
+        </div>
+
+        <!-- Input Section -->
+        <div class="space-y-6">
+            <div>
+                <label for="job-sites-list" class="block text-sm font-semibold text-slate-700 mb-1">Job Site URLs</label>
+                <textarea id="job-sites-list" rows="6" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition" placeholder="Enter one job board or company careers page URL per line...&#10;https://www.linkedin.com/jobs/search/...&#10;https://www.indeed.com/q-software-developer-jobs.html&#10;https://boards.greenhouse.io/openai"></textarea>
+            </div>
+            <div>
+                <label for="keywords-input" class="block text-sm font-semibold text-slate-700 mb-1">Keywords</label>
+                <input type="text" id="keywords-input" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition" placeholder="Enter keywords, separated by commas (e.g., Python, React, API)">
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="mt-8 flex flex-col md:flex-row justify-center items-center gap-4">
+            <button id="start-search-btn" class="btn btn-primary w-full md:w-auto">
+                <i class="fas fa-search"></i>
+                <span>Start Search</span>
+            </button>
+            <button id="test-scraper-btn" class="btn btn-secondary w-full md:w-auto">
+                <i class="fas fa-vial"></i>
+                <span>Test Scraper</span>
+            </button>
+        </div>
+
+        <!-- Results Section -->
+        <div class="mt-8">
+            <h2 class="text-xl font-bold text-slate-800 mb-4">Results</h2>
+            <div id="results-container" class="w-full min-h-[100px] bg-slate-50 border rounded-lg p-4 space-y-3 overflow-y-auto max-h-80">
+                <p class="text-slate-400">Your search results will appear here.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script type="module">
+        // --- DOM Elements ---
+        const jobSitesList = document.getElementById('job-sites-list');
+        const keywordsInput = document.getElementById('keywords-input');
+        const startSearchBtn = document.getElementById('start-search-btn');
+        const testScraperBtn = document.getElementById('test-scraper-btn');
+        const resultsContainer = document.getElementById('results-container');
+
+        // --- Event Listeners ---
+        startSearchBtn.addEventListener('click', runSearch);
+        testScraperBtn.addEventListener('click', testScraper);
+
+        /**
+         * The main function to orchestrate the search process.
+         * It first finds job links on the seed URLs, then scrapes each job link for keywords.
+         */
+        async function runSearch() {
+            // 1. Get and validate inputs
+            const seedUrls = jobSitesList.value.split('\n').map(url => url.trim()).filter(url => url.length > 0 && url.startsWith('http'));
+            const keywords = keywordsInput.value.split(',').map(k => k.trim().toLowerCase()).filter(k => k);
+
+            if (seedUrls.length === 0) {
+                resultsContainer.innerHTML = '<p class="text-red-500">Please enter at least one valid URL.</p>';
+                return;
+            }
+            if (keywords.length === 0) {
+                resultsContainer.innerHTML = '<p class="text-red-500">Please enter at least one keyword.</p>';
+                return;
+            }
+
+            // 2. Prepare UI for searching
+            startSearchBtn.disabled = true;
+            testScraperBtn.disabled = true;
+            startSearchBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i><span class="ml-2">Searching...</span>`;
+            resultsContainer.innerHTML = ''; // Clear previous results
+
+            let totalMatchesFound = 0;
+
+            // 3. Loop through each SEED URL to find job links
+            for (const seedUrl of seedUrls) {
+                updateStatus(`Scanning ${seedUrl} for job links...`);
+                try {
+                    const htmlContent = await scrapeUrlWithNetlifyFunction(seedUrl);
+                    if (!htmlContent) {
+                        throw new Error("Could not retrieve page content.");
+                    }
+
+                    const jobLinks = extractJobLinks(htmlContent, seedUrl);
+                    if (jobLinks.length === 0) {
+                        updateStatus(`No job links found on ${seedUrl}.`, true);
+                        continue;
+                    }
+                    
+                    updateStatus(`Found ${jobLinks.length} potential job links on ${seedUrl}. Now checking each one...`, true);
+
+                    // 4. Loop through the discovered job links and check for keywords
+                    for (let i = 0; i < jobLinks.length; i++) {
+                        const jobLink = jobLinks[i];
+                        updateStatus(`Checking job ${i + 1}/${jobLinks.length}: ${jobLink}`);
+
+                        try {
+                            const jobPageText = await scrapeUrlWithNetlifyFunction(jobLink);
+                            if (!jobPageText) continue;
+
+                            const textToSearch = jobPageText.toLowerCase();
+                            const foundKeywords = keywords.filter(keyword => textToSearch.includes(keyword));
+
+                            if (foundKeywords.length > 0) {
+                                totalMatchesFound++;
+                                const resultItem = createResultItem(
+                                    true,
+                                    jobLink,
+                                    `Match found! Keywords: ${foundKeywords.join(', ')}`
+                                );
+                                resultsContainer.appendChild(resultItem);
+                                resultsContainer.scrollTop = resultsContainer.scrollHeight;
+                            }
+                        } catch (jobError) {
+                            console.error(`Failed to process job link ${jobLink}:`, jobError);
+                            // Optionally display an error for individual job links
+                        }
+                    }
+
+                } catch (seedError) {
+                    console.error(`Failed to process seed URL ${seedUrl}:`, seedError);
+                    const errorItem = createResultItem(false, seedUrl, `Could not scan this site. Error: ${seedError.message}`);
+                    resultsContainer.appendChild(errorItem);
+                }
+            }
+
+            // 5. Finalize UI
+            if (totalMatchesFound === 0) {
+                 updateStatus('Search complete. No keyword matches found in any job listings.', true);
+            } else {
+                 updateStatus(`Search complete. Found ${totalMatchesFound} total matching jobs.`, true);
+            }
+
+            startSearchBtn.disabled = false;
+            testScraperBtn.disabled = false;
+            startSearchBtn.innerHTML = `<i class="fas fa-search"></i><span>Start Search</span>`;
+        }
+        
+        /**
+         * Parses HTML content to find and return absolute URLs that appear to be job postings.
+         * @param {string} htmlContent - The raw HTML of a page.
+         * @param {string} baseUrl - The base URL of the page, for resolving relative links.
+         * @returns {string[]} An array of unique, absolute URLs.
+         */
+        function extractJobLinks(htmlContent, baseUrl) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = htmlContent;
+            const anchors = tempDiv.querySelectorAll('a');
+            const uniqueLinks = new Set();
+            
+            // Keywords that often appear in job posting URLs
+            const jobUrlKeywords = ['job', 'career', 'opening', 'position', 'requisition', 'posting'];
+
+            anchors.forEach(a => {
+                let href = a.getAttribute('href');
+                if (href) {
+                    // Check if the link text or URL itself suggests it's a job
+                    const linkText = a.textContent.toLowerCase();
+                    const hrefLower = href.toLowerCase();
+                    const isJobLink = jobUrlKeywords.some(kw => hrefLower.includes(kw) || linkText.includes(kw));
+
+                    if (isJobLink) {
+                        try {
+                             // Create a full URL from a relative path (e.g., /jobs/123)
+                            const absoluteUrl = new URL(href, baseUrl).href;
+                            uniqueLinks.add(absoluteUrl);
+                        } catch (e) {
+                            console.warn(`Could not create a valid URL from href: ${href}`);
+                        }
+                    }
+                }
+            });
+
+            return Array.from(uniqueLinks);
+        }
+
+        /**
+         * A simple function to test if the scraper is working correctly.
+         */
+        async function testScraper() {
+            resultsContainer.innerHTML = ''; // Clear results
+            updateStatus('Testing scraper function by trying to fetch google.com...');
+            startSearchBtn.disabled = true;
+            testScraperBtn.disabled = true;
+            try {
+                const text = await scrapeUrlWithNetlifyFunction('https://www.google.com');
+                if (text && text.length > 0) {
+                    resultsContainer.innerHTML = ''; // Clear status
+                    const successItem = createResultItem(true, 'https://www.google.com', 'Scraper Test Successful! Content was retrieved.');
+                    resultsContainer.appendChild(successItem);
+                } else {
+                    throw new Error("No content was returned from the scraper function.");
+                }
+            } catch (error) {
+                console.error("Scraper Function Test Failed:", error);
+                resultsContainer.innerHTML = ''; // Clear status
+                const errorItem = createResultItem(false, 'https://www.google.com', `Scraper Test Failed. Error: ${error.message}. Check the console (F12) for details.`);
+                resultsContainer.appendChild(errorItem);
+            } finally {
+                startSearchBtn.disabled = false;
+                testScraperBtn.disabled = false;
+            }
+        }
+
+        /**
+         * Updates a persistent status message at the bottom of the results container.
+         * @param {string} message - The text to display.
+         * @param {boolean} [isFinal=false] - If true, the message will have a different style.
+         */
+        function updateStatus(message, isFinal = false) {
+            let statusEl = document.getElementById('status-message');
+            if (!statusEl) {
+                statusEl = document.createElement('p');
+                statusEl.id = 'status-message';
+                resultsContainer.appendChild(statusEl);
+            }
+            statusEl.textContent = message;
+            statusEl.className = isFinal ? 'font-semibold text-slate-700 p-2' : 'italic text-slate-500 p-2';
+            resultsContainer.scrollTop = resultsContainer.scrollHeight;
+        }
+
+
+        /**
+         * Creates an HTML element to display a search result.
+         * @param {boolean} isSuccess - Whether the search for this URL was successful.
+         * @param {string} url - The URL that was searched.
+         * @param {string} message - The message to display (e.g., keywords found or error message).
+         * @returns {HTMLElement} - The div element representing the result item.
+         */
+        function createResultItem(isSuccess, url, message) {
+            const item = document.createElement('div');
+            item.className = `p-3 rounded-md bg-white shadow-sm ${isSuccess ? 'result-item-success' : 'result-item-error'}`;
+            
+            let displayUrl = url;
+            try {
+                displayUrl = new URL(url).hostname + new URL(url).pathname;
+            } catch (e) { /* use original url if invalid */ }
+
+
+            item.innerHTML = `
+                <div class="flex justify-between items-center">
+                    <a href="${url}" target="_blank" class="font-semibold text-teal-700 hover:underline truncate pr-4">${displayUrl}</a>
+                    ${isSuccess 
+                        ? '<span class="text-xs font-bold uppercase text-green-600 bg-green-100 px-2 py-1 rounded-full">Match</span>' 
+                        : '<span class="text-xs font-bold uppercase text-red-600 bg-red-100 px-2 py-1 rounded-full">Failed</span>'
+                    }
+                </div>
+                <p class="text-sm text-slate-600 mt-1">${message}</p>
+            `;
+            return item;
+        }
+
+        /**
+         * Calls a serverless function to scrape the content of a given URL.
+         * This function avoids browser CORS (Cross-Origin Resource Sharing) issues.
+         * @param {string} url - The URL to scrape.
+         * @returns {Promise<string|null>} - The text content of the page, or null if it fails.
+         */
+        async function scrapeUrlWithNetlifyFunction(url) {
+            // This path assumes you have a Netlify function named 'scrape' in the default functions directory.
+            const functionUrl = `/.netlify/functions/scrape`;
+            try {
+                const response = await fetch(functionUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: url })
+                });
+
+                if (!response.ok) {
+                    const errorBody = await response.text();
+                    throw new Error(`Scraping function failed with status ${response.status}: ${errorBody}`);
+                }
+                const result = await response.json();
+                return result.text;
+            } catch (error) {
+                console.error("Error calling scrape function:", error);
+                throw error; // Re-throw the error to be handled by the runSearch function
+            }
+        }
+
+    </script>
+</body>
+</html>
