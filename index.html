@@ -1,137 +1,103 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Job Keyword Finder</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-        .spinner {
-            border: 4px solid rgba(0, 0, 0, 0.1);
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            border-left-color: #09f;
-            animation: spin 1s ease infinite;
+import json
+import requests
+from bs4 import BeautifulSoup
+import time
+import traceback
+
+# --- Configuration ---
+# Selectors for Indeed.com. These MUST be changed for other sites.
+LINK_SELECTOR = 'h2.jobTitle > a'
+DESCRIPTION_SELECTOR = 'div#jobDescriptionText'
+BASE_URL = "https://www.indeed.com"
+USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+MAX_LINKS_TO_CHECK = 20 # Limit to avoid function timeouts. Increased slightly.
+PAGES_TO_SCRAPE = 3 # How many pages of search results to scrape.
+
+def get_links(url):
+    """
+    Gets all job links from the first few pages of a search result.
+    """
+    all_links = []
+    
+    # Loop through the first N pages. For Indeed, each page is a 'start' parameter incremented by 10.
+    for page in range(PAGES_TO_SCRAPE):
+        start_index = page * 10
+        # Append the start parameter to the URL. Use '?' if it's the first param, '&' otherwise.
+        paginated_url = f"{url}&start={start_index}"
+        
+        print(f"Scraping links from page {page + 1}: {paginated_url}")
+
+        try:
+            response = requests.get(paginated_url, headers={'User-Agent': USER_AGENT})
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            links_on_page = [a['href'] for a in soup.select(LINK_SELECTOR) if 'href' in a.attrs]
+            full_links = [BASE_URL + link if link.startswith('/') else link for link in links_on_page]
+            all_links.extend(full_links)
+            
+            # Small delay between page requests
+            time.sleep(0.2)
+
+        except Exception as e:
+            print(f"Could not scrape page {page + 1}. Reason: {e}")
+            # Continue to the next page even if one fails
+            continue
+            
+    return list(set(all_links)) # Return unique links from all pages
+
+def get_keywords_from_page(url, keywords):
+    """Checks a single job page for a list of keywords."""
+    try:
+        time.sleep(0.5) # Be respectful to the server
+        response = requests.get(url, headers={'User-Agent': USER_AGENT})
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        description_area = soup.select_one(DESCRIPTION_SELECTOR)
+        if not description_area:
+            return None
+
+        page_text = description_area.get_text().lower()
+        found_keywords = [kw for kw in keywords if kw in page_text]
+        
+        if found_keywords:
+            title = soup.title.string.replace('- Indeed.com', '').strip() if soup.title else 'Job Listing'
+            return {'title': title, 'link': url, 'found_keywords': found_keywords}
+        return None
+    except Exception:
+        # We can ignore errors on individual pages
+        return None
+
+def handler(event, context):
+    """The main Netlify Function handler."""
+    try:
+        body = json.loads(event.get('body', '{}'))
+        search_url = body.get('search_url')
+        keywords = body.get('keywords', [])
+
+        if not search_url or not keywords:
+            return {'statusCode': 400, 'body': json.dumps({'error': 'Missing search URL or keywords.'})}
+
+        all_links = get_links(search_url)
+        links_to_check = all_links[:MAX_LINKS_TO_CHECK]
+        
+        print(f"Found {len(all_links)} total links across {PAGES_TO_SCRAPE} pages. Checking the first {len(links_to_check)}.")
+
+        matched_jobs = []
+        for link in links_to_check:
+            job_details = get_keywords_from_page(link, keywords)
+            if job_details:
+                matched_jobs.append(job_details)
+        
+        return {
+            'statusCode': 200,
+            'headers': {'Content-Type': 'application/json'},
+            'body': json.dumps({'matched_jobs': matched_jobs})
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+    except Exception as e:
+        print(traceback.format_exc())
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'error': str(e)})
         }
-    </style>
-</head>
-<body class="bg-slate-100">
-
-    <div class="max-w-4xl mx-auto p-4 md:p-8">
-        <div class="text-center my-8">
-            <h1 class="text-4xl md:text-5xl font-bold text-slate-800">Job Keyword Finder</h1>
-            <p class="text-slate-600 mt-2">Find jobs that match your skills.</p>
-        </div>
-
-        <div class="bg-white rounded-xl shadow-md p-6 md:p-8">
-            <div class="space-y-6">
-                <div>
-                    <label for="searchUrl" class="text-sm font-medium text-slate-700">Job Search URL</label>
-                    <input type="url" id="searchUrl" class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500" placeholder="https://www.indeed.com/jobs?q=..." required>
-                </div>
-                <div>
-                    <label for="keywords" class="text-sm font-medium text-slate-700">Keywords (comma-separated)</label>
-                    <input type="text" id="keywords" class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500" placeholder="python, react, sql, remote" required>
-                </div>
-            </div>
-            <div class="flex space-x-4 mt-6">
-                <button id="submitBtn" class="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Find Jobs</button>
-                <button id="testBtn" class="w-full bg-slate-500 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Test API</button>
-            </div>
-        </div>
-
-        <div id="statusArea" class="mt-8 text-center p-4 bg-white rounded-xl shadow-md hidden">
-            <div id="spinner" class="spinner mx-auto hidden"></div>
-            <p id="statusText" class="mt-2 text-slate-600"></p>
-        </div>
-
-        <div id="resultsArea" class="mt-4 space-y-3">
-            <!-- Results will be injected here -->
-        </div>
-    </div>
-
-<script>
-    const submitBtn = document.getElementById('submitBtn');
-    const testBtn = document.getElementById('testBtn');
-    const statusArea = document.getElementById('statusArea');
-    const spinner = document.getElementById('spinner');
-    const statusText = document.getElementById('statusText');
-    const resultsArea = document.getElementById('resultsArea');
-
-    const setStatus = (message, isLoading = false, isError = false) => {
-        statusArea.classList.remove('hidden');
-        statusText.textContent = message;
-        statusText.className = isError ? 'mt-2 text-red-600' : 'mt-2 text-slate-600';
-        spinner.classList.toggle('hidden', !isLoading);
-    };
-
-    testBtn.addEventListener('click', async () => {
-        resultsArea.innerHTML = '';
-        setStatus('Calling test function...', true);
-        try {
-            const response = await fetch('/.netlify/functions/test');
-            if (!response.ok) throw new Error(`Server responded with ${response.status}`);
-            const data = await response.json();
-            setStatus(`Success! API says: "${data.message}"`);
-        } catch (err) {
-            setStatus(`Test failed: ${err.message}`, false, true);
-        }
-    });
-
-    submitBtn.addEventListener('click', async () => {
-        const searchUrl = document.getElementById('searchUrl').value;
-        const keywords = document.getElementById('keywords').value.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
-
-        if (!searchUrl || keywords.length === 0) {
-            setStatus('Please provide a URL and keywords.', false, true);
-            return;
-        }
-
-        resultsArea.innerHTML = '';
-        setStatus('Scraping jobs... this can take up to 25 seconds.', true);
-        submitBtn.disabled = true;
-
-        try {
-            const response = await fetch('/.netlify/functions/scrape', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ search_url: searchUrl, keywords: keywords }),
-            });
-
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({ error: 'An unknown server error occurred.' }));
-                throw new Error(errData.error);
-            }
-
-            const data = await response.json();
-            setStatus(`Found ${data.matched_jobs.length} matching jobs.`, false);
-
-            if (data.matched_jobs.length > 0) {
-                data.matched_jobs.forEach(job => {
-                    const jobCard = document.createElement('div');
-                    jobCard.className = 'bg-white p-4 rounded-lg shadow-md border border-slate-200';
-                    jobCard.innerHTML = `
-                        <a href="${job.link}" target="_blank" rel="noopener noreferrer" class="text-sky-600 hover:underline font-bold break-all">${job.title}</a>
-                        <p class="text-sm text-slate-500 mt-1">Keywords: ${job.found_keywords.join(', ')}</p>
-                    `;
-                    resultsArea.appendChild(jobCard);
-                });
-            }
-
-        } catch (err) {
-            setStatus(`Scraping failed: ${err.message}`, false, true);
-        } finally {
-            submitBtn.disabled = false;
-        }
-    });
-</script>
-
-</body>
-</html>
