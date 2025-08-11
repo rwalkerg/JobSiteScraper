@@ -10,8 +10,8 @@ LINK_SELECTOR = 'h2.jobTitle > a'
 DESCRIPTION_SELECTOR = 'div#jobDescriptionText'
 BASE_URL = "https://www.indeed.com"
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-MAX_LINKS_TO_CHECK = 20 # Limit to avoid function timeouts. Increased slightly.
-PAGES_TO_SCRAPE = 3 # How many pages of search results to scrape.
+MAX_LINKS_TO_CHECK = 25 # Limit to avoid function timeouts
+PAGES_TO_SCRAPE = 3 # How many pages of search results to scrape
 
 def get_links(url):
     """
@@ -22,8 +22,10 @@ def get_links(url):
     # Loop through the first N pages. For Indeed, each page is a 'start' parameter incremented by 10.
     for page in range(PAGES_TO_SCRAPE):
         start_index = page * 10
-        # Append the start parameter to the URL. Use '?' if it's the first param, '&' otherwise.
-        paginated_url = f"{url}&start={start_index}"
+        
+        # Correctly append the start parameter to the URL
+        separator = '&' if '?' in url else '?'
+        paginated_url = f"{url}{separator}start={start_index}"
         
         print(f"Scraping links from page {page + 1}: {paginated_url}")
 
