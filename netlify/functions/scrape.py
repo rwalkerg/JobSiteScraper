@@ -10,20 +10,41 @@ LINK_SELECTOR = 'h2.jobTitle > a'
 DESCRIPTION_SELECTOR = 'div#jobDescriptionText'
 BASE_URL = "https://www.indeed.com"
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-MAX_LINKS_TO_CHECK = 15 # Limit to avoid function timeouts
+MAX_LINKS_TO_CHECK = 20 # Limit to avoid function timeouts. Increased slightly.
+PAGES_TO_SCRAPE = 3 # How many pages of search results to scrape.
 
 def get_links(url):
-    """Gets all job links from the main search page."""
-    try:
-        response = requests.get(url, headers={'User-Agent': USER_AGENT})
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-        links = [a['href'] for a in soup.select(LINK_SELECTOR) if 'href' in a.attrs]
-        full_links = [BASE_URL + link if link.startswith('/') else link for link in links]
-        return list(set(full_links)) # Return unique links
-    except Exception as e:
-        print(f"ERROR fetching main URL: {e}")
-        raise ValueError(f"Could not fetch or parse the search URL. Please check the link. Error: {e}")
+    """
+    Gets all job links from the first few pages of a search result.
+    """
+    all_links = []
+    
+    # Loop through the first N pages. For Indeed, each page is a 'start' parameter incremented by 10.
+    for page in range(PAGES_TO_SCRAPE):
+        start_index = page * 10
+        # Append the start parameter to the URL. Use '?' if it's the first param, '&' otherwise.
+        paginated_url = f"{url}&start={start_index}"
+        
+        print(f"Scraping links from page {page + 1}: {paginated_url}")
+
+        try:
+            response = requests.get(paginated_url, headers={'User-Agent': USER_AGENT})
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            links_on_page = [a['href'] for a in soup.select(LINK_SELECTOR) if 'href' in a.attrs]
+            full_links = [BASE_URL + link if link.startswith('/') else link for link in links_on_page]
+            all_links.extend(full_links)
+            
+            # Small delay between page requests
+            time.sleep(0.2)
+
+        except Exception as e:
+            print(f"Could not scrape page {page + 1}. Reason: {e}")
+            # Continue to the next page even if one fails
+            continue
+            
+    return list(set(all_links)) # Return unique links from all pages
 
 def get_keywords_from_page(url, keywords):
     """Checks a single job page for a list of keywords."""
@@ -61,6 +82,8 @@ def handler(event, context):
         all_links = get_links(search_url)
         links_to_check = all_links[:MAX_LINKS_TO_CHECK]
         
+        print(f"Found {len(all_links)} total links across {PAGES_TO_SCRAPE} pages. Checking the first {len(links_to_check)}.")
+
         matched_jobs = []
         for link in links_to_check:
             job_details = get_keywords_from_page(link, keywords)
